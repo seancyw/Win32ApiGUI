@@ -5,8 +5,11 @@
 #endif
 
 #include <Windows.h>
+#include <iostream>
 
 // forward declaration
+HINSTANCE hInstance;
+HBITMAP hBitmap = NULL;
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow)
@@ -16,6 +19,7 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_ HINSTANCE hPrevInstance, _In
 
 	ZeroMemory(&wcex, sizeof(wcex));
 
+	::hInstance = hInstance;
 	wcex.cbSize = sizeof(wcex);
 	wcex.style = CS_HREDRAW | CS_VREDRAW;
 	wcex.lpszClassName = TEXT("IMAGEVIEWCLASS");
@@ -38,7 +42,7 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_ HINSTANCE hPrevInstance, _In
 	cs.hInstance = hInstance;
 	cs.lpszClass = wcex.lpszClassName;
 	cs.lpszName = TEXT("Image Window");
-	cs.style = WS_OVERLAPPEDWINDOW;
+	cs.style = WS_OVERLAPPEDWINDOW & ~WS_MAXIMIZEBOX & ~WS_MINIMIZEBOX;
 
 	HWND hWnd = ::CreateWindowEx(cs.dwExStyle, cs.lpszClass, cs.lpszName,
 		cs.style, cs.x, cs.y, cs.cx, cs.cy, cs.hwndParent, cs.hMenu, cs.hInstance, cs.lpCreateParams);
@@ -55,35 +59,50 @@ int CALLBACK WinMain(_In_ HINSTANCE hInstance, _In_ HINSTANCE hPrevInstance, _In
 	// previously allocated for this window.
 	::UnregisterClass(wcex.lpszClassName, hInstance);
 
-	return (int)msg.wParam;
+	return static_cast<int>( msg.wParam );
 }
 
 // Window Procedure
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	int wmId, wmEvent;
-	PAINTSTRUCT ps;
-	HDC hdc;
-
 	switch (uMsg)
 	{
-	case WM_COMMAND:
-		wmId = LOWORD(wParam);
-		wmEvent = HIWORD(wParam);
-		// Parse the menu selections:
-		switch (wmId)
+	case WM_CREATE:
+		::hBitmap = (HBITMAP)LoadImage(::hInstance, TEXT("c:\\mercury.bmp"), IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+		if (::hBitmap == NULL)
 		{
-		default:
-			return DefWindowProc(hWnd, uMsg, wParam, lParam);
+			DWORD dwError = ::GetLastError();
+			throw ;
 		}
+
 		break;
 	case WM_PAINT:
+		PAINTSTRUCT ps;
+		HDC hdc, memoryDC;
+		BITMAP bitmap;
+		HGDIOBJ oldBitmap;
+
 		hdc = BeginPaint(hWnd, &ps);
-		// TODO: Add any drawing code here...
+		
+		// Create memory device compatible with above dc variables
+		memoryDC = CreateCompatibleDC(hdc);
+
+		// Select new bitmap
+		oldBitmap = SelectObject(memoryDC, ::hBitmap);
+
+		GetObject(::hBitmap, sizeof(bitmap), &bitmap);
+		BitBlt(hdc, 0, 0, bitmap.bmWidth, bitmap.bmHeight, memoryDC, 0, 0, SRCCOPY);
+
+		SelectObject(memoryDC, oldBitmap);
+
+		//Restore old bitmap
+		DeleteDC(memoryDC);
+		
 		EndPaint(hWnd, &ps);
 		break;
 	case WM_DESTROY:
-		PostQuitMessage(0);
+		::DeleteObject(::hBitmap);
+		PostQuitMessage(WM_QUIT);
 		break;
 	default:
 		return DefWindowProc(hWnd, uMsg, wParam, lParam);
